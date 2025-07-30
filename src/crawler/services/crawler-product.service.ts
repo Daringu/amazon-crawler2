@@ -101,8 +101,8 @@ export class CrawlerProductService {
 
       const { productsOnPage, hasNextPage } = await page.evaluate(() => {
         const products = Array.from(
-          document
-            .querySelector('[data-card-metrics-id]')
+          Array.from(document.querySelectorAll('[data-card-metrics-id]') ?? [])
+            .filter((el) => el.querySelector('[data-asin]'))?.[0]
             ?.querySelectorAll('[data-asin]') ?? [],
         )
           .map((el) => el.querySelector('a')?.href)
