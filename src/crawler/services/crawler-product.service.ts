@@ -90,6 +90,10 @@ export class CrawlerProductService {
     });
   }
 
+  async getLinksByIds(ids: number[]) {
+    return await this.productLinkRepo.find({ where: { id: In(ids) } });
+  }
+
   async crawlProductLinks(page: Page) {
     const links: string[] = [];
     while (true) {
@@ -126,7 +130,7 @@ export class CrawlerProductService {
       ]);
     }
 
-    await this.crawlerLinks.saveProductLinks(
+    return await this.crawlerLinks.saveProductLinks(
       links.map((link) => ({
         link,
         linkState: CRAWLER_LINK_STATE.NEWLY_DISCOVERED,

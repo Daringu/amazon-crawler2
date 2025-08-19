@@ -9,6 +9,9 @@ import { CrawlerLinksService } from './crawler-links.service';
 import { cleanLink } from '../utils/cleanLinks';
 import { CrawlerProductService } from './crawler-product.service';
 import { imitateHuman } from '../utils/immitate-human';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { CRAWLER_QUEUES } from '../consts/crawler-queues';
 
 @Injectable()
 export class CrawlerCategoryService {
@@ -17,6 +20,8 @@ export class CrawlerCategoryService {
     private readonly categoryRepo: CategoryRepo,
     private readonly crawlerLinks: CrawlerLinksService,
     private readonly crawlerProduct: CrawlerProductService,
+    @InjectQueue(CRAWLER_QUEUES.PRODUCT_ENTITIES)
+    private readonly productQueue: Queue,
   ) {}
 
   async getNewlyDiscoveredLinks() {
@@ -24,6 +29,10 @@ export class CrawlerCategoryService {
       where: { linkState: CRAWLER_LINK_STATE.NEWLY_DISCOVERED },
       take: 20,
     });
+  }
+
+  async getLinksByIds(ids: number[]) {
+    return await this.categoryLinkRepo.find({ where: { id: In(ids) } });
   }
 
   async crawlLinks(page: Page) {
@@ -50,7 +59,13 @@ export class CrawlerCategoryService {
       .map(cleanLink)
       .filter((link) => !this.crawlerLinks.linkShouldBeAvoided(link));
     try {
-      await this.crawlerProduct.crawlProductLinks(page);
+      const links = await this.crawlerProduct.crawlProductLinks(page);
+
+      if (links) {
+        await this.productQueue.add('predetirmined-products', {
+          linkIds: links.map((link) => link.id),
+        });
+      }
     } catch (error) {
       console.log(error);
     }

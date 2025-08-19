@@ -1,6 +1,6 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { CRAWLER_QUEUES } from '../consts/crawler-queues';
-import { Queue } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { CrawlerLinksService } from '../services/crawler-links.service';
 import { CRAWLER_LINK_STATE } from '../types/link-state.type';
 import { CRAWLER_MARKETPLACES } from '../consts/marketplaces';
@@ -9,6 +9,7 @@ import { CrawlerProductService } from '../services/crawler-product.service';
 import { ICrawlerProduct } from '../types/crawler-product.type';
 import { CrawlerBrowserManagerService } from '../services/crawlerBrowserManager.service';
 import { Page } from 'puppeteer';
+import { JobData } from '../types/job-data';
 
 @Processor(CRAWLER_QUEUES.PRODUCT_ENTITIES, {
   lockDuration: 2 * 60 * 60 * 1000,
@@ -26,9 +27,13 @@ export class CrawlerProductConsumer extends WorkerHost {
     super();
   }
 
-  async process(): Promise<any> {
+  async process(job: Job<JobData>): Promise<any> {
+    const predeterminedIds = job.data?.linkIds ?? [];
     try {
-      const links = await this.crawlerProductService.getNewlyDiscoveredLinks();
+      const links =
+        predeterminedIds.length > 0
+          ? await this.crawlerProductService.getLinksByIds(predeterminedIds)
+          : await this.crawlerProductService.getNewlyDiscoveredLinks();
 
       if (links.length < 1) {
         return { ok: true };
@@ -56,7 +61,9 @@ export class CrawlerProductConsumer extends WorkerHost {
     } catch (error) {
       console.log(error);
     } finally {
-      await this.productQueue.add('product-crawl', {});
+      if (job.name !== 'predetirmined-products') {
+        await this.productQueue.add('product-crawl', {});
+      }
     }
   }
 

@@ -86,7 +86,7 @@ export class CrawlerLinksService {
     }
 
     // Insert new links only
-    await this.productLinkRepo.save(
+    return await this.productLinkRepo.save(
       linksToSave.filter((link) => link !== null),
     );
   }
@@ -125,7 +125,7 @@ export class CrawlerLinksService {
     }
 
     // Insert new links only
-    await this.categoryLinkRepo.save(
+    return await this.categoryLinkRepo.save(
       linksToSave.filter((link) => link !== null),
     );
   }

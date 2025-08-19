@@ -1,12 +1,13 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { CRAWLER_QUEUES } from '../consts/crawler-queues';
-import { Queue } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { CrawlerLinksService } from '../services/crawler-links.service';
 import { CrawlerCategoryService } from '../services/crawler-category.service';
 import { CRAWLER_LINK_STATE } from '../types/link-state.type';
 import { CRAWLER_MARKETPLACES } from '../consts/marketplaces';
 import { UserAgentsService } from '../services/userAgents.service';
 import { CrawlerBrowserManagerService } from '../services/crawlerBrowserManager.service';
+import { JobData } from '../types/job-data';
 
 @Processor(CRAWLER_QUEUES.CATEGORY_LINKS, {
   lockDuration: 2 * 60 * 60 * 1000,
@@ -24,9 +25,13 @@ export class CrawlerCategoryConsumer extends WorkerHost {
     super();
   }
 
-  async process(): Promise<any> {
+  async process(job: Job<JobData>): Promise<any> {
+    const predeterminedIds = job.data?.linkIds ?? [];
     try {
-      const links = await this.crawlerCategoryService.getNewlyDiscoveredLinks();
+      const links =
+        predeterminedIds.length > 0
+          ? await this.crawlerCategoryService.getLinksByIds(predeterminedIds)
+          : await this.crawlerCategoryService.getNewlyDiscoveredLinks();
 
       if (links.length < 1) {
         return { ok: true };
@@ -54,7 +59,9 @@ export class CrawlerCategoryConsumer extends WorkerHost {
     } catch (error) {
       console.log(error);
     } finally {
-      await this.categoriesQueue.add('links-crawl', {});
+      if (job.name !== 'predetermined-categories') {
+        await this.categoriesQueue.add('links-crawl', {});
+      }
     }
   }
 
