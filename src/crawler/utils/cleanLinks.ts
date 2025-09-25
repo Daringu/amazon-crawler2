@@ -1,18 +1,26 @@
-export function cleanLink(url: string) {
+export function cleanLink(url: string, language: string): string {
   try {
     const parsed = new URL(url);
-    const segments = parsed.pathname.split('/');
 
-    // Check if last segment starts with 'ref=' and remove it if yes
+    // --- 1. Clean up "ref=" from query params ---
+    parsed.searchParams.delete('ref');
+
+    // --- 2. Set or replace language param ---
+    parsed.searchParams.set('language', language);
+
+    // --- 3. Clean up "ref=" segments in pathname ---
+    const segments = parsed.pathname.split('/').filter(Boolean);
+
     if (segments.length && segments[segments.length - 1].startsWith('ref=')) {
       segments.pop();
     }
 
-    // Rebuild pathname without last ref= segment
-    const cleanPath = segments.join('/');
+    parsed.pathname = '/' + segments.join('/');
 
-    return parsed.origin + cleanPath;
+    return parsed.toString();
   } catch {
-    return url; // fallback
+    return url; // fallback if invalid URL
   }
 }
+
+//TODO: need to check if link from best sellers

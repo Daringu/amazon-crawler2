@@ -3,15 +3,12 @@ import { CrawlerCategoryService } from './crawler-category.service';
 import { ProductRepo } from '../repositories/product-repo.service';
 import { ICrawlerProduct } from '../types/crawler-product.type';
 import { In } from 'typeorm';
-import { CrawlerMarketPlaceService } from './crawlerMarketPlace.service';
 import { CrawlerProductEntity } from '../entities/product.entity';
-import { ProductLinkRepo } from '../repositories/product-link-repo.service';
-import { CRAWLER_LINK_STATE } from '../types/link-state.type';
 import { Page } from 'puppeteer';
-import { CrawlerLinksService } from './crawler-links.service';
 import { SellersRank } from '../types/sellers-rank.type';
 import { imitateHuman } from '../utils/immitate-human';
 import { extractAmazonAmount } from '../utils/extractAmazonAmount';
+import { AmazonMarketplaceService } from 'src/amazon-marketplace/amazon-marketplace.service';
 
 @Injectable()
 export class CrawlerProductService {
@@ -19,9 +16,7 @@ export class CrawlerProductService {
     @Inject(forwardRef(() => CrawlerCategoryService))
     private readonly crawlerCategory: CrawlerCategoryService,
     private readonly productRepo: ProductRepo,
-    private readonly marketplaceService: CrawlerMarketPlaceService,
-    private readonly productLinkRepo: ProductLinkRepo,
-    private readonly crawlerLinks: CrawlerLinksService,
+    private readonly marketplaceService: AmazonMarketplaceService,
   ) {}
 
   async saveProducts(products: ICrawlerProduct[]) {
@@ -33,9 +28,7 @@ export class CrawlerProductService {
 
     const result = await Promise.allSettled(
       products.map(async (product) => {
-        const mp = this.marketplaceService.extractMarketplaceFromUrl(
-          product.link,
-        );
+        const mp = this.marketplaceService.getMarketplaceFromLink(product.link);
         if (!mp) {
           throw new Error('no marketplace');
         }
@@ -83,17 +76,6 @@ export class CrawlerProductService {
     return result;
   }
 
-  async getNewlyDiscoveredLinks() {
-    return await this.productLinkRepo.find({
-      where: { linkState: CRAWLER_LINK_STATE.NEWLY_DISCOVERED },
-      take: 50,
-    });
-  }
-
-  async getLinksByIds(ids: number[]) {
-    return await this.productLinkRepo.find({ where: { id: In(ids) } });
-  }
-
   async crawlProductLinks(page: Page) {
     const links: string[] = [];
     while (true) {
@@ -130,12 +112,7 @@ export class CrawlerProductService {
       ]);
     }
 
-    return await this.crawlerLinks.saveProductLinks(
-      links.map((link) => ({
-        link,
-        linkState: CRAWLER_LINK_STATE.NEWLY_DISCOVERED,
-      })),
-    );
+    return links;
   }
 
   async crawlProduct(page: Page): Promise<ICrawlerProduct> {
@@ -499,8 +476,6 @@ export class CrawlerProductService {
         RRP: getRRPPrice() ?? 0,
       };
     });
-
-    console.log(product);
 
     return product;
   }

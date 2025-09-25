@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CategoryLink } from '../entities/category-link.entity';
+import { CrawlerRequest } from '../entities/crawl-request.entity';
 
 @Injectable()
-export class CategoryLinkRepo extends Repository<CategoryLink> {
+export class CrawlerRequestRepo extends Repository<CrawlerRequest> {
   constructor(
-    @InjectRepository(CategoryLink)
-    readonly repository: Repository<CategoryLink>,
+    @InjectRepository(CrawlerRequest)
+    readonly repository: Repository<CrawlerRequest>,
   ) {
     super(repository.target, repository.manager, repository.queryRunner);
   }

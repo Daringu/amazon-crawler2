@@ -1,11 +1,5 @@
-import { CategoryLink } from 'src/crawler/entities/category-link.entity';
 import { CrawlerCategory } from 'src/crawler/entities/category.entity';
-import { ProductLink } from 'src/crawler/entities/product-link.entity';
+import { CrawlerRequest } from 'src/crawler/entities/crawl-request.entity';
 import { CrawlerProductEntity } from 'src/crawler/entities/product.entity';
 
-export const entites = [
-  ProductLink,
-  CategoryLink,
-  CrawlerProductEntity,
-  CrawlerCategory,
-];
+export const entites = [CrawlerProductEntity, CrawlerCategory, CrawlerRequest];
