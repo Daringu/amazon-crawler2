@@ -8,7 +8,6 @@ import { CrawlerCategory } from './entities/category.entity';
 import { CrawlerProductEntity } from './entities/product.entity';
 import { CrawlerCategoryService } from './services/crawler-category.service';
 import { CrawlerProductService } from './services/crawler-product.service';
-import { CrawlerLinksService } from './services/crawler-links.service';
 import { BullModule } from '@nestjs/bullmq';
 import { CRAWLER_QUEUES } from './consts/crawler-queues';
 import { CrawlerCategoryConsumer } from './consumers/crawler-category.consumer';
@@ -33,7 +32,6 @@ import { CrawlerRequestRepo } from './repositories/crawler-request.repository.se
     CategoryRepo,
     CrawlerCategoryService,
     CrawlerProductService,
-    CrawlerLinksService,
     CrawlerCategoryConsumer,
     CrawlerRequestRepo,
   ],
