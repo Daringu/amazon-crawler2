@@ -1,0 +1,65 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - production
+      - development
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Determine Deployment Environment
+        id: deploy_env
+        run: |
+          if [[ $GITHUB_REF_NAME == "production" ]]; then
+            echo "DEPLOY_HOST=${{ secrets.PROD_HOST }}" >> $GITHUB_ENV
+          elif [[ $GITHUB_REF_NAME == "development" ]]; then
+            echo "DEPLOY_HOST=${{ secrets.DEV_HOST }}" >> $GITHUB_ENV
+          else
+            echo "Unknown branch: $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      - name: Deploy to EC2
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_KEY }} # Use a single SSH key for both instances
+          USER: ubuntu
+          DEPLOY_HOST: ${{ env.DEPLOY_HOST }}
+        run: |
+          # Save the private key to a file
+           echo "$PRIVATE_KEY" > private_key.pem
+           chmod 600 private_key.pem  # Set permissions on the private key file
+
+           # Copy necessary files (excluding .env and node_modules) using rsync
+           rsync -avz --exclude 'node_modules' --exclude '.git' --exclude '.env' \
+            dist package.json package-lock.json $USER@$DEPLOY_HOST:~/app/ \
+            -e "ssh -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+           # SSH into EC2 and restart the service
+           ssh -i private_key.pem $USER@$DEPLOY_HOST -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null << 'EOF'
+             cd ~/app
+             sudo pm2 delete app || true  # Stop and delete old process if it exists
+             npm install
+             sudo pm2 start dist/src/main.js --name app --node-args="--max-old-space-size=2048"
+           EOF
+
+           # Remove the private key after use
+           rm -f private_key.pem
+        shell: /usr/bin/bash -e {0}
