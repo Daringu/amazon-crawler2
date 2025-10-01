@@ -1,14 +1,15 @@
 import * as puppeteer from 'puppeteer';
-import { CRAWLER_MARKETPLACES } from '../consts/marketplaces';
 import { UserAgentsService } from './userAgents.service';
-import { initialCrawlLinksByMarketplace } from '../consts/initial-crawl-links-by-marketplace';
 import { Injectable } from '@nestjs/common';
-import { BrowsersReturn } from '../types/browsers-return.type';
-import { zipCodesByMarketPlace } from '../consts/zip-codes-by-marketplace';
+import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
+import { AmazonMarketplaceService } from 'src/amazon-marketplace/amazon-marketplace.service';
 
 @Injectable()
 export class CrawlerBrowserManagerService {
-  constructor(private readonly userAgentService: UserAgentsService) {}
+  constructor(
+    private readonly userAgentService: UserAgentsService,
+    private readonly amazonMarketplaceService: AmazonMarketplaceService,
+  ) {}
 
   async createBrowserInstance() {
     return await puppeteer.launch({
@@ -21,7 +22,15 @@ export class CrawlerBrowserManagerService {
     });
   }
 
-  async initializeBroserByMarketplace(mp: CRAWLER_MARKETPLACES) {
+  async initializeBroserByMarketplace(
+    mp: AMAZON_MARKETPLACES,
+    initialLink: string,
+  ) {
+    const code = this.amazonMarketplaceService.getZipCode(mp);
+
+    if (!code) {
+      throw new Error('No zip code');
+    }
     const browser = await this.createBrowserInstance();
 
     const page = await browser.newPage();
@@ -29,7 +38,7 @@ export class CrawlerBrowserManagerService {
 
     await page.setUserAgent(this.userAgentService.getRandomUserAgent());
 
-    await page.goto(initialCrawlLinksByMarketplace[mp], {
+    await page.goto(initialLink, {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
@@ -53,21 +62,9 @@ export class CrawlerBrowserManagerService {
           body: params,
         });
       },
-      zipCodesByMarketPlace[mp], // 👈 pass here!
+      code, // 👈 pass here!
     );
 
     return { browser, marketplace: mp };
-  }
-
-  async initializeBrowsersWithAppropirateZipCode(): Promise<BrowsersReturn[]> {
-    const marketplaces = Object.values(CRAWLER_MARKETPLACES);
-
-    const instances = await Promise.all(
-      marketplaces.map(async (mp) => {
-        return this.initializeBroserByMarketplace(mp);
-      }),
-    );
-
-    return instances;
   }
 }

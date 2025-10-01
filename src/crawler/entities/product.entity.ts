@@ -2,7 +2,8 @@ import { AbstractEntityWithTimestamp } from 'src/database/entity/abstract.entity
 import { Column, Entity, JoinTable, ManyToMany, Unique } from 'typeorm';
 import { CrawlerCategory } from './category.entity';
 import { SellersRank } from '../types/sellers-rank.type';
-import { CRAWLER_MARKETPLACES } from '../consts/marketplaces';
+import { CrawlerRequest } from './crawl-request.entity';
+import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
 
 // Define composite unique constraint
 @Entity()
@@ -11,6 +12,10 @@ export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
   @ManyToMany(() => CrawlerCategory, (category) => category.products)
   @JoinTable()
   categories: CrawlerCategory[];
+
+  @ManyToMany(() => CrawlerRequest, (request) => request.products)
+  @JoinTable()
+  requests: CrawlerRequest[];
 
   @Column({ nullable: false })
   asin: string;
@@ -66,8 +71,8 @@ export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
   @Column('jsonb', { nullable: true })
   sellerRanks: Array<SellersRank>;
 
-  @Column({ nullable: false })
-  marketplace: CRAWLER_MARKETPLACES;
+  @Column({ nullable: false, type: 'varchar' })
+  marketplace: AMAZON_MARKETPLACES;
 
   @Column('decimal', { precision: 10, scale: 2, nullable: true, default: 0 })
   RRP: number;

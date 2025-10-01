@@ -1,7 +1,6 @@
-import { Browser } from 'puppeteer';
 import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
 
-export interface BrowsersReturn {
-  browser: Browser;
+export class CrawlerRequestDto {
+  requestId: number;
   marketplace: AMAZON_MARKETPLACES;
 }
