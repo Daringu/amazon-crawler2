@@ -14,6 +14,7 @@ export class CrawlerBrowserManagerService {
   async createBrowserInstance() {
     return await puppeteer.launch({
       headless: true,
+      executablePath: '/usr/bin/google-chrome',
       args: [
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
