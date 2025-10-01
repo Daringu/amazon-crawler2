@@ -57,7 +57,7 @@ jobs:
              cd ~/app
              sudo pm2 delete app || true  # Stop and delete old process if it exists
              npm install
-             sudo pm2 start dist/src/main.js --name app --node-args="--max-old-space-size=2048"
+             sudo pm2 start dist/main.js --name app --node-args="--max-old-space-size=2048"
            EOF
 
            # Remove the private key after use
