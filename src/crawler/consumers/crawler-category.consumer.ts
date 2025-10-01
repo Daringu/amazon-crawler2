@@ -15,6 +15,7 @@ import { CrawlerRequest } from '../entities/crawl-request.entity';
 @Processor(CRAWLER_QUEUES.CATEGORY_LINKS, {
   lockDuration: 2 * 60 * 60 * 1000,
   maxStalledCount: 2,
+  concurrency: 5,
 })
 export class CrawlerCategoryConsumer extends WorkerHost {
   constructor(
@@ -100,7 +101,7 @@ export class CrawlerCategoryConsumer extends WorkerHost {
     mp: AMAZON_MARKETPLACES,
   ) {
     const products: ICrawlerProduct[] = [];
-    const batchSize = 5;
+    const batchSize = 1;
 
     for (let i = 0; i < links.length; i += batchSize) {
       const batch = links.slice(i, i + batchSize);
