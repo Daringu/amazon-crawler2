@@ -13,4 +13,13 @@ export class CrawlerRequest extends AbstractEntityWithTimestamp {
 
   @Column({ nullable: false })
   profileId: number;
+
+  @Column({ nullable: false })
+  isLoading: boolean;
+
+  @Column({ nullable: false })
+  name: string;
+
+  @Column({ nullable: false })
+  isError: boolean;
 }

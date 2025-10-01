@@ -22,5 +22,3 @@ export function cleanLink(url: string, language: string): string {
     return url; // fallback if invalid URL
   }
 }
-
-//TODO: need to check if link from best sellers

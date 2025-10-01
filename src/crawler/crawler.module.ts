@@ -22,7 +22,10 @@ import { CrawlerRequestRepo } from './repositories/crawler-request.repository.se
       CrawlerProductEntity,
       CrawlerRequest,
     ]),
-    BullModule.registerQueue({ name: CRAWLER_QUEUES.CATEGORY_LINKS }),
+    BullModule.registerQueue(
+      { name: CRAWLER_QUEUES.CATEGORY_LINKS },
+      { name: CRAWLER_QUEUES.FINISHED_CRALWING },
+    ),
     AmazonMarketplaceModule,
   ],
   providers: [

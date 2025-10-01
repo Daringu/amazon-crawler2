@@ -71,8 +71,7 @@ export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
   @Column('jsonb', { nullable: true })
   sellerRanks: Array<SellersRank>;
 
-  //TODO: change this also in main app
-  @Column({ nullable: false })
+  @Column({ nullable: false, type: 'varchar' })
   marketplace: AMAZON_MARKETPLACES;
 
   @Column('decimal', { precision: 10, scale: 2, nullable: true, default: 0 })

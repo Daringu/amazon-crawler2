@@ -1,16 +1,14 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { CRAWLER_QUEUES } from '../consts/crawler-queues';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { CrawlerCategoryService } from '../services/crawler-category.service';
 import { UserAgentsService } from '../services/userAgents.service';
 import { CrawlerBrowserManagerService } from '../services/crawlerBrowserManager.service';
 import { CrawlerRequestDto } from '../dtos/crawler-request.dto';
 import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
-import { AmazonMarketplaceService } from 'src/amazon-marketplace/amazon-marketplace.service';
 import { Browser, Page } from 'puppeteer';
 import { ICrawlerProduct } from '../types/crawler-product.type';
 import { CrawlerProductService } from '../services/crawler-product.service';
-import { cleanLink } from '../utils/cleanLinks';
 import { CrawlerRequestRepo } from '../repositories/crawler-request.repository.service';
 import { CrawlerRequest } from '../entities/crawl-request.entity';
 
@@ -20,43 +18,30 @@ import { CrawlerRequest } from '../entities/crawl-request.entity';
 })
 export class CrawlerCategoryConsumer extends WorkerHost {
   constructor(
-    @InjectQueue(CRAWLER_QUEUES.CATEGORY_LINKS)
-    private readonly amazonMarketplaceService: AmazonMarketplaceService,
     private readonly crawlerCategoryService: CrawlerCategoryService,
     private readonly userAgentsService: UserAgentsService,
     private readonly crawlerBrowserManager: CrawlerBrowserManagerService,
     private readonly crawlerProductService: CrawlerProductService,
     private readonly crawlerRequestRepo: CrawlerRequestRepo,
+    @InjectQueue(CRAWLER_QUEUES.FINISHED_CRALWING)
+    private readonly finishedCrawlingQueue: Queue,
   ) {
     super();
   }
 
   async process(job: Job<CrawlerRequestDto>): Promise<any> {
-    const { marketplace, profileId, link: dirtyLink } = job.data;
-    try {
-      const link = cleanLink(
-        dirtyLink,
-        this.amazonMarketplaceService.getMarketplaceLanguage(marketplace),
-      );
-      const matchMarketplace =
-        this.amazonMarketplaceService.isLinkFromMarketplace(marketplace, link);
-
-      if (!matchMarketplace) {
-        throw new Error('link does not match marketplace');
-      }
-      let crawlerRequest: CrawlerRequest = new CrawlerRequest();
-      crawlerRequest.link = link;
-      crawlerRequest.profileId = profileId;
-      const existingRequest = await this.crawlerRequestRepo.findOneBy({
-        link,
-        profileId,
+    const { requestId, marketplace } = job.data;
+    const crawlerRequest: CrawlerRequest | null =
+      await this.crawlerRequestRepo.findOneBy({
+        id: requestId,
       });
-
-      if (existingRequest) {
-        crawlerRequest = existingRequest;
+    try {
+      if (!crawlerRequest) {
+        throw new Error('request not found');
       }
+      crawlerRequest.isLoading = true;
 
-      const res = await this.crawl(marketplace, link);
+      const res = await this.crawl(marketplace, crawlerRequest.link);
 
       crawlerRequest.products = res
         .filter((pr) => pr.status === 'fulfilled')
@@ -64,11 +49,23 @@ export class CrawlerCategoryConsumer extends WorkerHost {
 
       await this.crawlerRequestRepo.save(crawlerRequest);
     } catch (error) {
-      console.log(error);
+      if (crawlerRequest) {
+        crawlerRequest.isError = true;
+      }
+      console.error(error);
+    } finally {
+      if (crawlerRequest) {
+        crawlerRequest.isLoading = false;
+        await this.crawlerRequestRepo.save(crawlerRequest);
+        await this.finishedCrawlingQueue.add(`finished-crawling-${requestId}`, {
+          profileId: crawlerRequest.profileId,
+          requestId: crawlerRequest.id,
+        });
+      }
     }
   }
 
-  private crawl = async (mp: AMAZON_MARKETPLACES, link: string) => {
+  private async crawl(mp: AMAZON_MARKETPLACES, link: string) {
     if (!mp) throw new Error(`No browser found for marketplace`);
 
     const br = (
@@ -90,14 +87,18 @@ export class CrawlerCategoryConsumer extends WorkerHost {
       throw new Error('no product links');
     }
 
-    const products = await this.crawlProducts(links, br);
+    const products = await this.crawlProducts(links, br, mp);
 
     await br.close();
 
     return products;
-  };
+  }
 
-  private async crawlProducts(links: string[], br: Browser) {
+  private async crawlProducts(
+    links: string[],
+    br: Browser,
+    mp: AMAZON_MARKETPLACES,
+  ) {
     const products: ICrawlerProduct[] = [];
     const batchSize = 5;
 
@@ -130,6 +131,6 @@ export class CrawlerCategoryConsumer extends WorkerHost {
         console.log(error);
       }
     }
-    return await this.crawlerProductService.saveProducts(products);
+    return await this.crawlerProductService.saveProducts(products, mp);
   }
 }

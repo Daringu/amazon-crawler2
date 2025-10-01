@@ -9,6 +9,7 @@ import { SellersRank } from '../types/sellers-rank.type';
 import { imitateHuman } from '../utils/immitate-human';
 import { extractAmazonAmount } from '../utils/extractAmazonAmount';
 import { AmazonMarketplaceService } from 'src/amazon-marketplace/amazon-marketplace.service';
+import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
 
 @Injectable()
 export class CrawlerProductService {
@@ -19,7 +20,10 @@ export class CrawlerProductService {
     private readonly marketplaceService: AmazonMarketplaceService,
   ) {}
 
-  async saveProducts(products: ICrawlerProduct[]) {
+  async saveProducts(
+    products: ICrawlerProduct[],
+    marketplace: AMAZON_MARKETPLACES,
+  ) {
     const asins = products.map((product) => product.asin);
 
     const existingProducts = await this.productRepo.find({
@@ -28,12 +32,12 @@ export class CrawlerProductService {
 
     const result = await Promise.allSettled(
       products.map(async (product) => {
-        const mp = this.marketplaceService.getMarketplaceFromLink(product.link);
-        if (!mp) {
-          throw new Error('no marketplace');
-        }
+        const mp = marketplace;
         const categories = await this.crawlerCategory.saveCategories(
-          product.sellerRanks.map((c) => c.category),
+          product.sellerRanks.map((c) => ({
+            link: c.category,
+            marketplace: mp,
+          })),
         );
 
         const entity =
@@ -71,7 +75,7 @@ export class CrawlerProductService {
     );
 
     const failed = result.filter((pr) => pr.status === 'rejected');
-    console.log(failed);
+    console.log('failed', failed);
 
     return result;
   }
