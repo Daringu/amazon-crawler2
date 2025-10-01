@@ -13,7 +13,7 @@ export class CrawlerBrowserManagerService {
 
   async createBrowserInstance() {
     return await puppeteer.launch({
-      headless: false,
+      headless: true,
       args: [
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
