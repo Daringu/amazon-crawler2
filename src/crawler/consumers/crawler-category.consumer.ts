@@ -15,7 +15,7 @@ import { CrawlerRequest } from '../entities/crawl-request.entity';
 @Processor(CRAWLER_QUEUES.CATEGORY_LINKS, {
   lockDuration: 2 * 60 * 60 * 1000,
   maxStalledCount: 2,
-  concurrency: 5,
+  concurrency: 2,
 })
 export class CrawlerCategoryConsumer extends WorkerHost {
   constructor(
