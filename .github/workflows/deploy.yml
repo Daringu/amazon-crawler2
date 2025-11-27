@@ -44,22 +44,29 @@ jobs:
           DEPLOY_HOST: ${{ env.DEPLOY_HOST }}
         run: |
           # Save the private key to a file
-           echo "$PRIVATE_KEY" > private_key.pem
-           chmod 600 private_key.pem  # Set permissions on the private key file
+          echo "$PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem  # Set permissions on the private key file
 
-           # Copy necessary files (excluding .env and node_modules) using rsync
-           rsync -avz --exclude 'node_modules' --exclude '.git' --exclude '.env' \
+          # SSH into EC2: remove old dist
+          ssh -i private_key.pem $USER@$DEPLOY_HOST -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null << 'EOF'
+            mkdir -p ~/app
+            cd ~/app
+            rm -rf dist
+          EOF
+
+          # Copy necessary files (excluding .env and node_modules) using rsync
+          rsync -avz --exclude 'node_modules' --exclude '.git' --exclude '.env' \
             dist package.json package-lock.json $USER@$DEPLOY_HOST:~/app/ \
             -e "ssh -i private_key.pem -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
-           # SSH into EC2 and restart the service
-           ssh -i private_key.pem $USER@$DEPLOY_HOST -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null << 'EOF'
-             cd ~/app
-             sudo pm2 delete app || true  # Stop and delete old process if it exists
-             npm install
-             sudo pm2 start dist/main.js --name app --node-args="--max-old-space-size=2048"
-           EOF
+          # SSH into EC2 and restart the service
+          ssh -i private_key.pem $USER@$DEPLOY_HOST -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null << 'EOF'
+            cd ~/app
+            sudo pm2 delete app || true  # Stop and delete old process if it exists
+            npm install
+            sudo pm2 start dist/main.js --name app --node-args="--max-old-space-size=2048"
+          EOF
 
-           # Remove the private key after use
-           rm -f private_key.pem
+          # Remove the private key after use
+          rm -f private_key.pem
         shell: /usr/bin/bash -e {0}

@@ -11,6 +11,7 @@ import { ICrawlerProduct } from '../types/crawler-product.type';
 import { CrawlerProductService } from '../services/crawler-product.service';
 import { CrawlerRequestRepo } from '../repositories/crawler-request.repository.service';
 import { CrawlerRequest } from '../entities/crawl-request.entity';
+import { Logger } from '@nestjs/common';
 
 @Processor(CRAWLER_QUEUES.CATEGORY_LINKS, {
   lockDuration: 2 * 60 * 60 * 1000,
@@ -30,6 +31,8 @@ export class CrawlerCategoryConsumer extends WorkerHost {
     super();
   }
 
+  private readonly logger = new Logger(CrawlerCategoryConsumer.name);
+
   async process(job: Job<CrawlerRequestDto>): Promise<any> {
     const { requestId, marketplace } = job.data;
     const crawlerRequest: CrawlerRequest | null =
@@ -40,6 +43,7 @@ export class CrawlerCategoryConsumer extends WorkerHost {
       if (!crawlerRequest) {
         throw new Error('request not found');
       }
+      this.logger.log(`started crawling for request ${crawlerRequest.id}`);
       crawlerRequest.isLoading = true;
 
       const res = await this.crawl(marketplace, crawlerRequest.link);
