@@ -24,10 +24,6 @@ const configService = new ConfigService();
       connection: {
         host: configService.getOrThrow<string>(EnvKeys.REDIS_URL),
         port: parseInt(configService.getOrThrow<string>(EnvKeys.REDIS_PORT)),
-        password:
-          configService.getOrThrow<string>(EnvKeys.IS_LOCAL) === 'true'
-            ? undefined
-            : configService.getOrThrow<string>(EnvKeys.REDIS_PASSWORD),
       },
     }),
     CustomConfigServiceModule,
