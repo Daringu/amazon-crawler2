@@ -1,6 +1,6 @@
-import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { CRAWLER_QUEUES } from '../consts/crawler-queues';
-import { Job, Queue } from 'bullmq';
+import { Job } from 'bullmq';
 import { CrawlerCategoryService } from '../services/crawler-category.service';
 import { UserAgentsService } from '../services/userAgents.service';
 import { CrawlerBrowserManagerService } from '../services/crawlerBrowserManager.service';
@@ -9,9 +9,9 @@ import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
 import { Browser, Page } from 'puppeteer';
 import { ICrawlerProduct } from '../types/crawler-product.type';
 import { CrawlerProductService } from '../services/crawler-product.service';
-import { CrawlerRequestRepo } from '../repositories/crawler-request.repository.service';
-import { CrawlerRequest } from '../entities/crawl-request.entity';
-import { Logger } from '@nestjs/common';
+import { ICrawledLink } from '../types/crawled-links.type';
+import { CrawlerCategory } from '../entities/category.entity';
+import { CategoryRepo } from '../repositories/category-repo.service';
 
 @Processor(CRAWLER_QUEUES.CATEGORY_LINKS, {
   lockDuration: 2 * 60 * 60 * 1000,
@@ -24,85 +24,85 @@ export class CrawlerCategoryConsumer extends WorkerHost {
     private readonly userAgentsService: UserAgentsService,
     private readonly crawlerBrowserManager: CrawlerBrowserManagerService,
     private readonly crawlerProductService: CrawlerProductService,
-    private readonly crawlerRequestRepo: CrawlerRequestRepo,
-    @InjectQueue(CRAWLER_QUEUES.FINISHED_CRALWING)
-    private readonly finishedCrawlingQueue: Queue,
+    private readonly categoryRepo: CategoryRepo,
   ) {
     super();
   }
 
-  private readonly logger = new Logger(CrawlerCategoryConsumer.name);
-
   async process(job: Job<CrawlerRequestDto>): Promise<any> {
-    const { requestId, marketplace } = job.data;
-    const crawlerRequest: CrawlerRequest | null =
-      await this.crawlerRequestRepo.findOneBy({
-        id: requestId,
-      });
+    const { link, marketplace, categoryId } = job.data;
+
     try {
-      if (!crawlerRequest) {
-        throw new Error('request not found');
+      const categoryFromRequest = categoryId
+        ? await this.categoryRepo.getCategoryById(categoryId)
+        : null;
+
+      const finalLink = link ?? categoryFromRequest?.link;
+
+      if (finalLink) {
+        await this.crawl(marketplace, finalLink, categoryFromRequest);
       }
-      this.logger.log(`started crawling for request ${crawlerRequest.id}`);
-      crawlerRequest.isLoading = true;
-
-      const res = await this.crawl(marketplace, crawlerRequest.link);
-
-      crawlerRequest.products = res
-        .filter((pr) => pr.status === 'fulfilled')
-        .map((pr) => pr.value);
-
-      await this.crawlerRequestRepo.save(crawlerRequest);
     } catch (error) {
-      if (crawlerRequest) {
-        crawlerRequest.isError = true;
-      }
       console.error(error);
-    } finally {
-      if (crawlerRequest) {
-        crawlerRequest.isLoading = false;
-        await this.crawlerRequestRepo.save(crawlerRequest);
-        await this.finishedCrawlingQueue.add(`finished-crawling-${requestId}`, {
-          profileId: crawlerRequest.profileId,
-          requestId: crawlerRequest.id,
-        });
-      }
     }
   }
 
-  private async crawl(mp: AMAZON_MARKETPLACES, link: string) {
+  private async crawl(
+    mp: AMAZON_MARKETPLACES,
+    link: string,
+    categoryFromRequest?: CrawlerCategory | null,
+  ): Promise<CrawlerCategory> {
     if (!mp) throw new Error(`No browser found for marketplace`);
-
+    console.log('crawling links');
     const br = (
       await this.crawlerBrowserManager.initializeBroserByMarketplace(mp, link)
     ).browser;
 
     const page = await br.newPage();
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent(this.userAgentsService.getRandomUserAgent());
-    await page.goto(link, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30000,
-    });
-    const links = await this.crawlerCategoryService.crawlLinks(page);
+    let category: CrawlerCategory | null = null;
+    try {
+      await page.setViewport({ width: 1920, height: 1080 });
+      await page.setUserAgent(this.userAgentsService.getRandomUserAgent());
+      await page.goto(link, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+      });
 
-    if (!links) {
+      const links = await this.crawlerCategoryService.crawlLinks(page);
+
+      category =
+        categoryFromRequest ??
+        (await this.crawlerCategoryService.extractCategory(page, link, mp));
+
+      if (!links) {
+        throw new Error('no product links');
+      }
+
+      await this.crawlProducts(
+        links.filter((link) => link !== null),
+        br,
+        mp,
+        category,
+      );
+
+      return category;
+    } catch (error) {
+      console.error(`Error crawling category ${link}:`, error);
+      throw error;
+    } finally {
+      if (category) {
+        await this.crawlerCategoryService.finishCategoryCrawling(category.id);
+      }
       await br.close();
       await page.close();
-      throw new Error('no product links');
     }
-
-    const products = await this.crawlProducts(links, br, mp);
-
-    await br.close();
-
-    return products;
   }
 
   private async crawlProducts(
-    links: string[],
+    links: ICrawledLink[],
     br: Browser,
     mp: AMAZON_MARKETPLACES,
+    category: CrawlerCategory,
   ) {
     const products: ICrawlerProduct[] = [];
     const batchSize = 1;
@@ -112,18 +112,21 @@ export class CrawlerCategoryConsumer extends WorkerHost {
 
       const crawlPromises = batch.map(async (link) => {
         let page: Page | null = null;
+        if (!link.link) {
+          return null;
+        }
         try {
           page = await br.newPage();
           await page.setViewport({ width: 1920, height: 1080 });
           await page.setUserAgent(this.userAgentsService.getRandomUserAgent());
-          await page.goto(link, {
+          await page.goto(link.link, {
             waitUntil: 'domcontentloaded',
             timeout: 30000,
           });
           const product = await this.crawlerProductService.crawlProduct(page);
           return product;
         } catch (err) {
-          console.error(`Error crawling ${link}:`, err);
+          console.error(`Error crawling ${link.link}:`, err);
           return null;
         } finally {
           await page?.close();
@@ -136,6 +139,11 @@ export class CrawlerCategoryConsumer extends WorkerHost {
         console.log(error);
       }
     }
-    return await this.crawlerProductService.saveProducts(products, mp);
+    return await this.crawlerProductService.saveProducts(
+      products,
+      mp,
+      category,
+      links,
+    );
   }
 }

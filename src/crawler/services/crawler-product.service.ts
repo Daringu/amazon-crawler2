@@ -1,54 +1,46 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
-import { CrawlerCategoryService } from './crawler-category.service';
+import { Injectable } from '@nestjs/common';
 import { ProductRepo } from '../repositories/product-repo.service';
 import { ICrawlerProduct } from '../types/crawler-product.type';
-import { In } from 'typeorm';
 import { CrawlerProductEntity } from '../entities/product.entity';
 import { Page } from 'puppeteer';
-import { SellersRank } from '../types/sellers-rank.type';
 import { imitateHuman } from '../utils/immitate-human';
 import { extractAmazonAmount } from '../utils/extractAmazonAmount';
-import { AmazonMarketplaceService } from 'src/amazon-marketplace/amazon-marketplace.service';
 import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
+import { ICrawledLink } from '../types/crawled-links.type';
+import { CrawlerCategory } from '../entities/category.entity';
 
 @Injectable()
 export class CrawlerProductService {
-  constructor(
-    @Inject(forwardRef(() => CrawlerCategoryService))
-    private readonly crawlerCategory: CrawlerCategoryService,
-    private readonly productRepo: ProductRepo,
-    private readonly marketplaceService: AmazonMarketplaceService,
-  ) {}
+  constructor(private readonly productRepo: ProductRepo) {}
 
   async saveProducts(
     products: ICrawlerProduct[],
     marketplace: AMAZON_MARKETPLACES,
+    category: CrawlerCategory,
+    dataFromLinks: ICrawledLink[],
   ) {
-    const asins = products.map((product) => product.asin);
+    return await this.productRepo.manager.transaction(async (manager) => {
+      // 1️⃣ delete old
+      await manager.delete(CrawlerProductEntity, {
+        category: { id: category.id },
+      });
 
-    const existingProducts = await this.productRepo.find({
-      where: { asin: In(asins) },
-    });
+      const dataMap = new Map<string, ICrawledLink>(
+        dataFromLinks.map((link) => [link.asin, link]),
+      );
 
-    const result = await Promise.allSettled(
-      products.map(async (product) => {
-        const mp = marketplace;
-        const categories = await this.crawlerCategory.saveCategories(
-          product.sellerRanks.map((c) => ({
-            link: c.category,
-            marketplace: mp,
-          })),
-        );
+      const entities = products.map((product) => {
+        const entity = new CrawlerProductEntity();
+        const linkData = dataMap.get(product.asin);
 
-        const entity =
-          existingProducts.find(
-            (ex) => ex.asin === product.asin && ex.marketplace === mp,
-          ) ?? new CrawlerProductEntity();
+        if (linkData) {
+          entity.rating = linkData.rating ?? 0;
+          entity.reviews = linkData.reviews ?? 0;
+          entity.rank = linkData.rank ?? null;
+        }
 
-        // Always set these two keys
         entity.asin = product.asin;
-        entity.marketplace = mp;
-
+        entity.marketplace = marketplace;
         entity.link = product.link;
         entity.title = product.title ?? null;
         entity.brand = product.brand ?? null;
@@ -66,22 +58,20 @@ export class CrawlerProductService {
         entity.dispatchesFrom = product.dispatchesFrom ?? null;
         entity.boughtForTheLastMonth =
           extractAmazonAmount(product.boughtForTheLastMonth ?? '') ?? null;
-        entity.sellerRanks = product.sellerRanks ?? [];
-        entity.categories = categories;
+        entity.category = category;
         entity.RRP = product.RRP;
 
-        return await this.productRepo.save(entity);
-      }),
-    );
+        return entity;
+      });
 
-    const failed = result.filter((pr) => pr.status === 'rejected');
-    console.log('failed', failed);
-
-    return result;
+      // 2️⃣ save new
+      return await manager.save(CrawlerProductEntity, entities);
+    });
   }
 
-  async crawlProductLinks(page: Page) {
-    const links: string[] = [];
+  async crawlProductLinks(page: Page): Promise<(ICrawledLink | null)[]> {
+    const links: (ICrawledLink | null)[] = [];
+
     while (true) {
       const startTime = Date.now();
       while (Date.now() - startTime < 3000) {
@@ -90,16 +80,41 @@ export class CrawlerProductService {
       }
 
       const { productsOnPage, hasNextPage } = await page.evaluate(() => {
-        const products = Array.from(
-          Array.from(document.querySelectorAll('[data-card-metrics-id]') ?? [])
-            .filter((el) => el.querySelector('[data-asin]'))?.[0]
-            ?.querySelectorAll('[data-asin]') ?? [],
-        )
-          .map((el) => el.querySelector('a')?.href)
+        const items = Array.from(document.querySelectorAll('[data-asin]'));
+
+        const products = items
+          .map((el) => {
+            const asin = el.getAttribute('data-asin');
+            if (!asin) return null;
+
+            const link = el.querySelector('a')?.href ?? null;
+
+            // rank "#1" -> 1
+            const rankText = el
+              .querySelector('.zg-bdg-text')
+              ?.textContent?.trim();
+            const rank = rankText ? Number(rankText.replace('#', '')) : null;
+
+            // rating "4.3 out of 5 stars" -> 4.3
+            const ratingMatch = el
+              .querySelector('.a-icon-alt')
+              ?.textContent?.match(/[\d.]+/);
+            const rating = ratingMatch ? Number(ratingMatch[0]) : null;
+
+            // reviews "267,506" -> 267506
+            const reviewsText = el
+              .querySelector('.a-size-small')
+              ?.textContent?.replace(/[^\d]/g, '');
+            const reviews = reviewsText ? Number(reviewsText) : null;
+
+            return { asin, link, rank, rating, reviews };
+          })
           .filter(Boolean);
+
         const nextPageLink = document.querySelector('.a-last a');
+
         return {
-          productsOnPage: products.filter((product) => product !== undefined),
+          productsOnPage: products,
           hasNextPage: !!nextPageLink,
         };
       });
@@ -115,6 +130,12 @@ export class CrawlerProductService {
         page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
       ]);
     }
+
+    links.forEach((link) => {
+      console.log(
+        `Crawled link: ${link?.link} (ASIN: ${link?.asin}, Rank: ${link?.rank}, Rating: ${link?.rating}, Reviews: ${link?.reviews})`,
+      );
+    });
 
     return links;
   }
@@ -146,77 +167,6 @@ export class CrawlerProductService {
       };
 
       const getASIN = () => {
-        const detailBullets = document.querySelector(
-          '#detailBullets_feature_div',
-        );
-        if (detailBullets) {
-          const listItems = detailBullets.querySelectorAll('li');
-          for (const li of listItems) {
-            const labelSpan = li.querySelector('.a-text-bold');
-            if (!labelSpan) continue;
-
-            const label = labelSpan.textContent
-              ?.replace(/\s/g, '')
-              ?.replace(/[:\u200e\u200f]/g, '')
-              ?.toLowerCase();
-
-            if (label === 'asin') {
-              const parentSpan = labelSpan.parentElement;
-              if (!parentSpan) continue;
-
-              const asinSpan = Array.from(parentSpan.children).find(
-                (el) =>
-                  !el.classList.contains('a-text-bold') &&
-                  el.tagName === 'SPAN',
-              );
-              if (asinSpan) {
-                return asinSpan.textContent?.trim();
-              }
-            }
-          }
-        }
-
-        const productDetails = document.querySelector(
-          '#productDetails_detailBullets_sections1',
-        );
-        if (productDetails) {
-          const rows = Array.from(productDetails.querySelectorAll('tr'));
-          for (const row of rows) {
-            const th = row.querySelector('th');
-            if (th && th.textContent?.toLowerCase().includes('asin')) {
-              return row.querySelector('td')?.textContent?.trim() || null;
-            }
-          }
-        }
-
-        const rows = Array.from(document.querySelectorAll('tr'));
-        for (const row of rows) {
-          const th = row.querySelector('th');
-          if (th && th.textContent?.toLowerCase().includes('asin')) {
-            return row.querySelector('td')?.textContent?.trim() || null;
-          }
-        }
-
-        const bullets = document.querySelector('#detailBullets_feature_div');
-        if (bullets) {
-          const items = Array.from(bullets.querySelectorAll('li'));
-          for (const li of items) {
-            if (li.innerText.includes('ASIN')) {
-              const match = li.innerText.match(/ASIN\s*[:\s]*([A-Z0-9]+)/i);
-              if (match) {
-                return match[1];
-              }
-            }
-          }
-        }
-
-        const match = document.body.innerText.match(
-          /ASIN\s*[:\s]*([A-Z0-9]{10})/i,
-        );
-        if (match) {
-          return match[1];
-        }
-
         return extractASINFromURL(document.URL);
       };
 
@@ -290,109 +240,6 @@ export class CrawlerProductService {
             ?.textContent?.trim() ??
           null
         );
-      };
-
-      const getSellerRanks = () => {
-        const ranks: SellersRank[] = [];
-        const table = document.querySelector(
-          '#productDetails_detailBullets_sections1',
-        );
-        if (table) {
-          const rows = Array.from(table.querySelectorAll('tr'));
-          for (const row of rows) {
-            const th = row.querySelector('th');
-            if (
-              th &&
-              th.textContent?.trim().toLowerCase().includes('best sellers rank')
-            ) {
-              const td = row.querySelector('td');
-              if (td) {
-                const lines = td.innerText.split('\n').map((s) => s.trim());
-                for (const line of lines) {
-                  const match = line.match(
-                    /#?([\d,]+)\s+in\s+(.+?)(?:\s+\(.*?\))?$/i,
-                  );
-                  if (match) {
-                    ranks.push({
-                      rank: parseInt(match[1]?.replace(/,/g, ''), 10),
-                      category: match[2],
-                    });
-                  }
-                }
-                if (ranks.length === 0) {
-                  const listItems = td.querySelectorAll('ul li');
-                  for (const li of listItems) {
-                    const text = li.textContent?.trim();
-                    const match = text?.match(
-                      /#?([\d,]+)\s+in\s+(.+?)(?:\s+\(.*?\))?$/i,
-                    );
-                    if (match) {
-                      ranks.push({
-                        rank: parseInt(match[1]?.replace(/,/g, ''), 10),
-                        category: match[2],
-                      });
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        if (ranks.length === 0) {
-          const bullets = document.querySelector(
-            '#detailBulletsWrapper_feature_div',
-          );
-          if (bullets) {
-            const lis = bullets.querySelectorAll('li');
-            for (const li of lis) {
-              if (li.innerText.toLowerCase().includes('best sellers rank')) {
-                const lines = li.innerText.split('\n').map((s) => s.trim());
-                for (const line of lines) {
-                  const match = line.match(
-                    /#?([\d,]+)\s+in\s+(.+?)(?:\s+\(.*?\))?$/i,
-                  );
-                  if (match) {
-                    ranks.push({
-                      rank: parseInt(match[1]?.replace(/,/g, ''), 10),
-                      category: match[2],
-                    });
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // 3. Fallback: zeitgeistBadge_feature_div
-        if (ranks.length === 0) {
-          const badgeDiv = document.querySelector(
-            '#zeitgeistBadge_feature_div',
-          );
-          if (badgeDiv) {
-            const rankSpan = badgeDiv.querySelector('.mvt-best-seller-badge');
-            const categorySpan = badgeDiv.querySelector(
-              '.mvt-cat-name .cat-link',
-            );
-
-            if (rankSpan && categorySpan) {
-              const rankMatch = rankSpan.textContent?.match(/#?([\d,]+)/);
-              const rawCategory = categorySpan.textContent?.trim() || '';
-
-              // remove leading 'in ' if present
-              const category = rawCategory.replace(/^in\s+/i, '');
-
-              if (rankMatch && category) {
-                ranks.push({
-                  rank: parseInt(rankMatch[1].replace(/,/g, ''), 10),
-                  category,
-                });
-              }
-            }
-          }
-        }
-
-        return ranks;
       };
 
       const getInteger = (sel: string) => {
@@ -475,7 +322,6 @@ export class CrawlerProductService {
         soldBy: getSoldBy() ?? '',
         dispatchesFrom: getDispatchesFrom() ?? '',
         boughtForTheLastMonth: getBoughtForTheLastMonth(),
-        sellerRanks: getSellerRanks(),
         ...getOtherMetrics(),
         RRP: getRRPPrice() ?? 0,
       };

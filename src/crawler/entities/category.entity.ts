@@ -1,5 +1,5 @@
 import { AbstractEntity } from 'src/database/entity/abstract.entity';
-import { Column, Entity, ManyToMany, Unique } from 'typeorm';
+import { Column, Entity, OneToMany, Unique } from 'typeorm';
 import { CrawlerProductEntity } from './product.entity';
 import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
 
@@ -9,9 +9,17 @@ export class CrawlerCategory extends AbstractEntity {
   @Column()
   name: string;
 
-  @Column({ type: 'varchar' })
+  @Column({ nullable: false, type: 'varchar' })
   marketplace: AMAZON_MARKETPLACES;
 
-  @ManyToMany(() => CrawlerProductEntity, (product) => product.categories)
+  @OneToMany(() => CrawlerProductEntity, (product) => product.category, {
+    cascade: true,
+  })
   products: CrawlerProductEntity[];
+
+  @Column()
+  link: string;
+
+  @Column('boolean', { default: false })
+  loading: boolean;
 }

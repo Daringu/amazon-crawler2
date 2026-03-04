@@ -1,5 +1,3 @@
-import { SellersRank } from './sellers-rank.type';
-
 export interface ICrawlerProduct {
   price: number;
   title: string;
@@ -18,6 +16,5 @@ export interface ICrawlerProduct {
   soldBy: string;
   dispatchesFrom: string;
   boughtForTheLastMonth: string | null;
-  sellerRanks: SellersRank[];
   RRP: number;
 }

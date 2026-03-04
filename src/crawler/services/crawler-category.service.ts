@@ -14,6 +14,54 @@ export class CrawlerCategoryService {
     private readonly crawlerProduct: CrawlerProductService,
   ) {}
 
+  async finishCategoryCrawling(categoryId: number) {
+    await this.categoryRepo.update({ id: categoryId }, { loading: false });
+  }
+
+  async extractCategory(
+    page: Page,
+    link: string,
+    marketplace: AMAZON_MARKETPLACES,
+  ): Promise<CrawlerCategory> {
+    const category = await page.evaluate(() => {
+      const text = document
+        .querySelector('h1.a-size-large.a-text-bold')
+        ?.textContent?.trim();
+
+      if (!text) return null;
+
+      return text.replace(/^Best Sellers in\s*/i, '');
+    });
+
+    console.log('extracted category', category);
+
+    if (!category) {
+      throw new Error('Category not found on the page');
+    }
+
+    const categoryEntity = new CrawlerCategory();
+    categoryEntity.name = category;
+    categoryEntity.link = link;
+    categoryEntity.marketplace = marketplace;
+    categoryEntity.loading = true;
+
+    await this.categoryRepo.upsert(categoryEntity, {
+      conflictPaths: ['name', 'marketplace'],
+      skipUpdateIfNoValuesChanged: true,
+    });
+
+    const result = await this.categoryRepo.findOneBy({
+      name: category,
+      marketplace,
+    });
+
+    if (!result) {
+      throw new Error('Failed to save or retrieve the category');
+    }
+
+    return result;
+  }
+
   async crawlLinks(page: Page) {
     await imitateHuman(page);
     try {
@@ -37,7 +85,6 @@ export class CrawlerCategoryService {
 
     await this.categoryRepo.upsert(enitites, {
       conflictPaths: ['name', 'marketplace'],
-      skipUpdateIfNoValuesChanged: true,
     });
 
     return await this.categoryRepo.find({

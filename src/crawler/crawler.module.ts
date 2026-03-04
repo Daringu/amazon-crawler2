@@ -12,20 +12,11 @@ import { BullModule } from '@nestjs/bullmq';
 import { CRAWLER_QUEUES } from './consts/crawler-queues';
 import { CrawlerCategoryConsumer } from './consumers/crawler-category.consumer';
 import { AmazonMarketplaceModule } from 'src/amazon-marketplace/amazon-marketplace.module';
-import { CrawlerRequest } from './entities/crawl-request.entity';
-import { CrawlerRequestRepo } from './repositories/crawler-request.repository.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([
-      CrawlerCategory,
-      CrawlerProductEntity,
-      CrawlerRequest,
-    ]),
-    BullModule.registerQueue(
-      { name: CRAWLER_QUEUES.CATEGORY_LINKS },
-      { name: CRAWLER_QUEUES.FINISHED_CRALWING },
-    ),
+    TypeOrmModule.forFeature([CrawlerCategory, CrawlerProductEntity]),
+    BullModule.registerQueue({ name: CRAWLER_QUEUES.CATEGORY_LINKS }),
     AmazonMarketplaceModule,
   ],
   providers: [
@@ -36,7 +27,6 @@ import { CrawlerRequestRepo } from './repositories/crawler-request.repository.se
     CrawlerCategoryService,
     CrawlerProductService,
     CrawlerCategoryConsumer,
-    CrawlerRequestRepo,
   ],
 })
 export class CrawlerModule {}

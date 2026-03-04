@@ -13,20 +13,14 @@ export class CrawlerBrowserManagerService {
 
   async createBrowserInstance() {
     return await puppeteer.launch({
-      headless: true,
-      executablePath: '/usr/bin/google-chrome',
+      headless: false,
+      // executablePath: '/usr/bin/google-chrome',
       args: [
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
         '--disable-accelerated-2d-canvas',
         '--no-first-run',
-        '--no-zygote',
-        '--single-process',
-        '--disable-gpu',
       ],
     });
   }
@@ -73,7 +67,6 @@ export class CrawlerBrowserManagerService {
       },
       code, // 👈 pass here!
     );
-
     return { browser, marketplace: mp };
   }
 }

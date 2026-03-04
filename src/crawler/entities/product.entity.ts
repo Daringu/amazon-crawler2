@@ -1,21 +1,16 @@
 import { AbstractEntityWithTimestamp } from 'src/database/entity/abstract.entity';
-import { Column, Entity, JoinTable, ManyToMany, Unique } from 'typeorm';
+import { Column, Entity, ManyToOne, Unique } from 'typeorm';
 import { CrawlerCategory } from './category.entity';
-import { SellersRank } from '../types/sellers-rank.type';
-import { CrawlerRequest } from './crawl-request.entity';
 import { AMAZON_MARKETPLACES } from 'src/amazon-marketplace/consts';
 
 // Define composite unique constraint
 @Entity()
 @Unique(['asin', 'marketplace'])
 export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
-  @ManyToMany(() => CrawlerCategory, (category) => category.products)
-  @JoinTable()
-  categories: CrawlerCategory[];
-
-  @ManyToMany(() => CrawlerRequest, (request) => request.products)
-  @JoinTable()
-  requests: CrawlerRequest[];
+  @ManyToOne(() => CrawlerCategory, (category) => category.products, {
+    onDelete: 'CASCADE',
+  })
+  category: CrawlerCategory;
 
   @Column({ nullable: false })
   asin: string;
@@ -23,11 +18,11 @@ export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
   @Column()
   link: string;
 
-  @Column({ nullable: true })
-  title: string;
+  @Column('varchar', { nullable: true })
+  title: string | null;
 
-  @Column({ nullable: true })
-  brand: string;
+  @Column('varchar', { nullable: true })
+  brand: string | null;
 
   @Column('decimal', { precision: 10, scale: 2, nullable: true })
   price: number;
@@ -50,8 +45,8 @@ export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
   @Column({ type: 'text', nullable: true })
   customerSay: string;
 
-  @Column({ nullable: true, default: 0 })
-  imageCount: number;
+  @Column('integer', { nullable: true, default: 0 })
+  imageCount: number | null;
 
   @Column('text', { array: true, nullable: true })
   imagesLinks: string[];
@@ -59,21 +54,27 @@ export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
   @Column('integer', { array: true, nullable: true })
   variations: number[];
 
-  @Column({ nullable: true })
-  soldBy: string;
+  @Column('varchar', { nullable: true })
+  soldBy: string | null;
 
-  @Column({ nullable: true })
-  dispatchesFrom: string;
+  @Column('varchar', { nullable: true })
+  dispatchesFrom: string | null;
 
   @Column('decimal', { precision: 10, scale: 2, nullable: true, default: 0 })
   boughtForTheLastMonth: number;
 
-  @Column('jsonb', { nullable: true })
-  sellerRanks: Array<SellersRank>;
-
-  @Column({ nullable: false, type: 'varchar' })
+  @Column('varchar', { nullable: false })
   marketplace: AMAZON_MARKETPLACES;
 
   @Column('decimal', { precision: 10, scale: 2, nullable: true, default: 0 })
+  rating: number | null;
+
+  @Column('integer', { nullable: true, default: 0 })
+  reviews: number | null;
+
+  @Column('decimal', { precision: 10, scale: 2, nullable: true, default: 0 })
   RRP: number;
+
+  @Column('integer', { nullable: true, default: 0 })
+  rank: number | null;
 }
