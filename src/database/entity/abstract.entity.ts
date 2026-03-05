@@ -10,9 +10,9 @@ export abstract class AbstractEntity {
 }
 
 export abstract class AbstractEntityWithTimestamp extends AbstractEntity {
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamptz' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ type: 'timestamptz' })
   updatedAt: Date;
 }
