@@ -33,6 +33,11 @@ export class CrawlerProductService {
         const entity = new CrawlerProductEntity();
         const linkData = dataMap.get(product.asin);
 
+        const dispatchValue =
+          (product.dispatchesFrom ?? '-') === (product.soldBy ?? '')
+            ? (product.dispatchesFrom ?? '-')
+            : `${product.dispatchesFrom ?? '-'} / ${product.soldBy ?? '-'}`;
+
         if (linkData) {
           entity.rating = linkData.rating ?? 0;
           entity.reviews = linkData.reviews ?? 0;
@@ -60,6 +65,11 @@ export class CrawlerProductService {
           extractAmazonAmount(product.boughtForTheLastMonth ?? '') ?? null;
         entity.category = category;
         entity.RRP = product.RRP;
+        entity.dispatchInfo = dispatchValue;
+        entity.totalVariations = product.variations.reduce(
+          (prev, curr) => prev * curr,
+          1,
+        );
 
         return entity;
       });

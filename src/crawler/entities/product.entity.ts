@@ -77,4 +77,10 @@ export class CrawlerProductEntity extends AbstractEntityWithTimestamp {
 
   @Column('integer', { nullable: true, default: 0 })
   rank: number | null;
+
+  @Column('integer', { nullable: true, default: 0 })
+  totalVariations: number | null;
+
+  @Column('varchar')
+  dispatchInfo: string;
 }
