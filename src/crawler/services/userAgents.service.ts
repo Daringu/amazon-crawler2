@@ -24,6 +24,7 @@ export class UserAgentsService {
 
   /**
    * Returns the full list of user agents
+   * 
    */
   get userAgents(): string[] {
     return this.USER_AGENTS;
