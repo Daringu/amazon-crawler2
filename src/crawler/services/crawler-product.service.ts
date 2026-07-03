@@ -159,7 +159,7 @@ export class CrawlerProductService {
 
     await imitateHuman(page);
 
-    const product = await page.evaluate(() => {
+    const product = await page.evaluate((asin: string) => {
       const getText = (sel: string) =>
         document.querySelector(sel)?.textContent?.trim() ?? '';
 
@@ -324,7 +324,7 @@ export class CrawlerProductService {
         ...getOtherMetrics(),
         RRP: getRRPPrice() ?? 0,
       };
-    });
+    }, asin);
 
     return product;
   }
