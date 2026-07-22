@@ -213,7 +213,7 @@ export class CrawlerProductService {
         return (
           document
             .querySelector('#sellerProfileTriggerId')
-            ?.textContent.trim() || null
+            ?.textContent?.trim() || null
         );
       };
 
@@ -221,6 +221,15 @@ export class CrawlerProductService {
         return (
           document
             .getElementById('merchantInfoFeature_feature_div')
+            ?.querySelector('.offer-display-feature-text-message')
+            ?.textContent?.trim() ?? null
+        );
+      };
+
+      const getDispatchesFromByFulfillerContainer = () => {
+        return (
+          document
+            .getElementById('fulfillerInfoFeature_feature_div')
             ?.querySelector('.offer-display-feature-text-message')
             ?.textContent?.trim() ?? null
         );
@@ -317,9 +326,13 @@ export class CrawlerProductService {
         price: getPrice() ?? 0,
         ...getImages(),
         ...getTotalVariations(),
-        soldBy: getSoldBy() ?? '',
-        //TODO: rename this column to actualSeller or something similar, because it is not always the seller, sometimes it is the dispatches from
-        dispatchesFrom: getSoldBy() ?? getDispatchesFrom() ?? '',
+        soldBy:
+          getSoldBy() ||
+          getDispatchesFrom() ||
+          getDispatchesFromByFulfillerContainer() ||
+          '',
+        dispatchesFrom:
+          getDispatchesFrom() || getDispatchesFromByFulfillerContainer() || '',
         boughtForTheLastMonth: getBoughtForTheLastMonth(),
         ...getOtherMetrics(),
         RRP: getRRPPrice() ?? 0,
