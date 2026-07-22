@@ -212,16 +212,15 @@ export class CrawlerProductService {
       const getSoldBy = () => {
         return (
           document
-            .getElementById('merchantInfoFeature_feature_div')
-            ?.querySelector('.offer-display-feature-text-message')
-            ?.textContent?.trim() ?? null
+            .querySelector('#sellerProfileTriggerId')
+            ?.textContent.trim() || null
         );
       };
 
       const getDispatchesFrom = () => {
         return (
           document
-            .getElementById('fulfillerInfoFeature_feature_div')
+            .getElementById('merchantInfoFeature_feature_div')
             ?.querySelector('.offer-display-feature-text-message')
             ?.textContent?.trim() ?? null
         );
@@ -319,7 +318,8 @@ export class CrawlerProductService {
         ...getImages(),
         ...getTotalVariations(),
         soldBy: getSoldBy() ?? '',
-        dispatchesFrom: getDispatchesFrom() ?? '',
+        //TODO: rename this column to actualSeller or something similar, because it is not always the seller, sometimes it is the dispatches from
+        dispatchesFrom: getSoldBy() ?? getDispatchesFrom() ?? '',
         boughtForTheLastMonth: getBoughtForTheLastMonth(),
         ...getOtherMetrics(),
         RRP: getRRPPrice() ?? 0,
