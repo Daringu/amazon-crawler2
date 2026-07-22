@@ -328,11 +328,11 @@ export class CrawlerProductService {
         ...getTotalVariations(),
         soldBy:
           getSoldBy() ||
-          getDispatchesFrom() ||
           getDispatchesFromByFulfillerContainer() ||
+          getDispatchesFrom() ||
           '',
         dispatchesFrom:
-          getDispatchesFrom() || getDispatchesFromByFulfillerContainer() || '',
+          getDispatchesFromByFulfillerContainer() || getDispatchesFrom() || '',
         boughtForTheLastMonth: getBoughtForTheLastMonth(),
         ...getOtherMetrics(),
         RRP: getRRPPrice() ?? 0,
