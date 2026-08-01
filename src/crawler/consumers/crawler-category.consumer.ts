@@ -123,7 +123,10 @@ export class CrawlerCategoryConsumer extends WorkerHost {
             waitUntil: 'domcontentloaded',
             timeout: 30000,
           });
-          const product = await this.crawlerProductService.crawlProduct(page);
+          const product = await this.crawlerProductService.crawlProduct(
+            page,
+            link.asin,
+          );
           return product;
         } catch (err) {
           console.error(`Error crawling ${link.link}:`, err);

@@ -150,7 +150,7 @@ export class CrawlerProductService {
     return links;
   }
 
-  async crawlProduct(page: Page): Promise<ICrawlerProduct> {
+  async crawlProduct(page: Page, asin: string): Promise<ICrawlerProduct> {
     // 🔷 Detect and handle interstitials
     const isCaptcha = await page.$('form[action*="validateCaptcha"]');
     if (isCaptcha) {
@@ -159,7 +159,7 @@ export class CrawlerProductService {
 
     await imitateHuman(page);
 
-    const product = await page.evaluate(() => {
+    const product = await page.evaluate((asin: string) => {
       const getText = (sel: string) =>
         document.querySelector(sel)?.textContent?.trim() ?? '';
 
@@ -167,17 +167,6 @@ export class CrawlerProductService {
         const txt = getText(sel)?.replace(/,/g, '.');
         const num = parseFloat(txt.match(/[\d.]+/)?.[0] ?? '');
         return isNaN(num) ? 0 : num;
-      };
-
-      const extractASINFromURL = (url: string) => {
-        const match =
-          url.match(/\/dp\/([A-Z0-9]{10})/) ||
-          url.match(/\/gp\/product\/([A-Z0-9]{10})/);
-        return match ? match[1] : null;
-      };
-
-      const getASIN = () => {
-        return extractASINFromURL(document.URL);
       };
 
       const getPrice = () => {
@@ -223,13 +212,21 @@ export class CrawlerProductService {
       const getSoldBy = () => {
         return (
           document
+            .querySelector('#sellerProfileTriggerId')
+            ?.textContent?.trim() || null
+        );
+      };
+
+      const getDispatchesFrom = () => {
+        return (
+          document
             .getElementById('merchantInfoFeature_feature_div')
             ?.querySelector('.offer-display-feature-text-message')
             ?.textContent?.trim() ?? null
         );
       };
 
-      const getDispatchesFrom = () => {
+      const getDispatchesFromByFulfillerContainer = () => {
         return (
           document
             .getElementById('fulfillerInfoFeature_feature_div')
@@ -325,17 +322,22 @@ export class CrawlerProductService {
       };
 
       return {
-        asin: getASIN()!,
+        asin,
         price: getPrice() ?? 0,
         ...getImages(),
         ...getTotalVariations(),
-        soldBy: getSoldBy() ?? '',
-        dispatchesFrom: getDispatchesFrom() ?? '',
+        soldBy:
+          getSoldBy() ||
+          getDispatchesFromByFulfillerContainer() ||
+          getDispatchesFrom() ||
+          '',
+        dispatchesFrom:
+          getDispatchesFromByFulfillerContainer() || getDispatchesFrom() || '',
         boughtForTheLastMonth: getBoughtForTheLastMonth(),
         ...getOtherMetrics(),
         RRP: getRRPPrice() ?? 0,
       };
-    });
+    }, asin);
 
     return product;
   }
