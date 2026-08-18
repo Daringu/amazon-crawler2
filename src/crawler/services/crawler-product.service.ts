@@ -305,7 +305,12 @@ export class CrawlerProductService {
 
         return {
           title: getText('#productTitle'),
-          brand: getText('.po-brand .po-break-word'),
+          brand:
+            getText('.po-brand .po-break-word').trim() ||
+            getSoldBy() ||
+            getDispatchesFromByFulfillerContainer() ||
+            getDispatchesFrom() ||
+            '',
           reviewCount: getInteger('#acrCustomerReviewText'),
           stars: getNumber('#acrPopover span'),
           videoCount,
